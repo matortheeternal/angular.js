@@ -746,6 +746,15 @@ function createInjector(modulesToLoad, strictDi) {
     forEach(loadModules(mods), function(fn) { if (fn) instanceInjector.invoke(fn); });
   };
 
+  instanceInjector.updateModule = function(module) {
+    runInvokeQueue(module._invokeQueue);
+    runInvokeQueue(module._configBlocks);
+    forEach(module._runBlocks, function(fn) { if (fn) instanceInjector.invoke(fn); });
+    module._invokeQueue.length = 0;
+    module._configBlocks.length = 0;
+    module._runBlocks.length = 0;
+  };
+
 
   return instanceInjector;
 
@@ -814,6 +823,16 @@ function createInjector(modulesToLoad, strictDi) {
     };
   }
 
+  function runInvokeQueue(queue) {
+    var i, ii;
+    for (i = 0, ii = queue.length; i < ii; i++) {
+      var invokeArgs = queue[i],
+        provider = providerInjector.get(invokeArgs[0]);
+
+      provider[invokeArgs[1]].apply(provider, invokeArgs[2]);
+    }
+  }
+
   ////////////////////////////////////
   // Module Loading
   ////////////////////////////////////
@@ -824,16 +843,6 @@ function createInjector(modulesToLoad, strictDi) {
       if (loadedModules.get(module)) return;
       loadedModules.set(module, true);
 
-      function runInvokeQueue(queue) {
-        var i, ii;
-        for (i = 0, ii = queue.length; i < ii; i++) {
-          var invokeArgs = queue[i],
-              provider = providerInjector.get(invokeArgs[0]);
-
-          provider[invokeArgs[1]].apply(provider, invokeArgs[2]);
-        }
-      }
-
       try {
         if (isString(module)) {
           moduleFn = angularModule(module);
@@ -841,6 +850,9 @@ function createInjector(modulesToLoad, strictDi) {
           runBlocks = runBlocks.concat(loadModules(moduleFn.requires)).concat(moduleFn._runBlocks);
           runInvokeQueue(moduleFn._invokeQueue);
           runInvokeQueue(moduleFn._configBlocks);
+          moduleFn._invokeQueue.length = 0;
+          moduleFn._configBlocks.length = 0;
+          moduleFn._runBlocks.length = 0;
         } else if (isFunction(module)) {
             runBlocks.push(providerInjector.invoke(module));
         } else if (isArray(module)) {
